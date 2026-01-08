@@ -8,7 +8,7 @@ jobs:
   build-ios:
     runs-on: macos-latest # ¡Aquí está la magia! Usamos un Mac de GitHub
     steps:
-      - uses: actions/checkout@v3
+      - uses: actions/checkout@v4
       - uses: subosito/flutter-action@v2
         with:
           channel: 'stable'
@@ -26,7 +26,7 @@ jobs:
           zip -r TuneX.ipa Payload
 
       - name: Subir el archivo IPA para descargar
-        uses: actions/upload-artifact@v3
+        uses: actions/upload-artifact@v4
         with:
           name: ios-app
           path: build/ios/iphoneos/TuneX.ipa
