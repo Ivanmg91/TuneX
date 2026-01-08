@@ -1,0 +1,29 @@
+{
+  "project_info": {
+    "project_number": "598100330134",
+    "project_id": "tunex-e612d",
+    "storage_bucket": "tunex-e612d.firebasestorage.app"
+  },
+  "client": [
+    {
+      "client_info": {
+        "mobilesdk_app_id": "1:598100330134:android:ca2ee3b48d168037a624b7",
+        "android_client_info": {
+          "package_name": "com.example.tunex"
+        }
+      },
+      "oauth_client": [],
+      "api_key": [
+        {
+          "current_key": "AIzaSyAxWj9m5JblakbaiG8brDwkEnjrCmMlGhM"
+        }
+      ],
+      "services": {
+        "appinvite_service": {
+          "other_platform_oauth_client": []
+        }
+      }
+    }
+  ],
+  "configuration_version": "1"
+}
