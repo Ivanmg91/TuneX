@@ -3,6 +3,7 @@ import 'package:just_audio/just_audio.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:url_launcher/url_launcher.dart';
+import 'package:video_player/video_player.dart'; // IMPORTANTE
 import 'profile_screen.dart';
 
 class FeedScreen extends StatefulWidget {
@@ -19,13 +20,12 @@ class _FeedScreenState extends State<FeedScreen> {
   String? _currentPlayingUrl;
   bool _isPlaying = false;
 
-  // Variables para el Mini Player
   String _currentTitle = "";
   String _currentArtist = "";
   String _currentImage = "";
   String _currentSongId = "";
   Map<String, dynamic> _currentSongData = {};
-  List<QueryDocumentSnapshot> _currentPlaylist = [];
+  List<QueryDocumentSnapshot> _currentPlaylist = []; 
 
   @override
   void initState() {
@@ -75,9 +75,9 @@ class _FeedScreenState extends State<FeedScreen> {
     } catch (e) {
       print("❌ Error al reproducir: $e");
       if (mounted) {
-        ScaffoldMessenger.of(
-          context,
-        ).showSnackBar(SnackBar(content: Text("No se pudo reproducir: $e")));
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text("No se pudo reproducir: $e")),
+        );
       }
     }
   }
@@ -85,9 +85,7 @@ class _FeedScreenState extends State<FeedScreen> {
   void _playNext() {
     if (_currentSongId.isEmpty || _currentPlaylist.isEmpty) return;
 
-    int currentIndex = _currentPlaylist.indexWhere(
-      (doc) => doc.id == _currentSongId,
-    );
+    int currentIndex = _currentPlaylist.indexWhere((doc) => doc.id == _currentSongId);
 
     if (currentIndex != -1 && currentIndex < _currentPlaylist.length - 1) {
       var nextSongDoc = _currentPlaylist[currentIndex + 1];
@@ -96,18 +94,11 @@ class _FeedScreenState extends State<FeedScreen> {
       String title = nextSong['title'] ?? 'Sin título';
       String artistEmail = nextSong['artistEmail'] ?? 'Desconocido';
       String artistName = nextSong['artistName'] ?? artistEmail.split('@')[0];
-
+      
       String audioUrl = nextSong['audioUrl'] ?? '';
       String imageUrl = nextSong['imageUrl'] ?? '';
 
-      _playSong(
-        audioUrl,
-        title,
-        artistName,
-        imageUrl,
-        nextSongDoc.id,
-        nextSong,
-      );
+      _playSong(audioUrl, title, artistName, imageUrl, nextSongDoc.id, nextSong);
     } else {
       ScaffoldMessenger.of(context).showSnackBar(
         const SnackBar(content: Text("Fin de la lista de reproducción")),
@@ -153,7 +144,7 @@ class _FeedScreenState extends State<FeedScreen> {
 
     if (confirm == true) {
       if (_currentSongId == songId) {
-        await widget.player.stop();
+        await widget.player.stop(); 
         setState(() {
           _currentPlayingUrl = null;
           _currentTitle = "";
@@ -166,9 +157,9 @@ class _FeedScreenState extends State<FeedScreen> {
       }
 
       await FirebaseFirestore.instance.collection('songs').doc(songId).delete();
-
+      
       if (mounted) {
-        Navigator.pop(context);
+        Navigator.pop(context); 
         ScaffoldMessenger.of(
           context,
         ).showSnackBar(const SnackBar(content: Text("Canción eliminada")));
@@ -231,12 +222,13 @@ class _FeedScreenState extends State<FeedScreen> {
       builder: (context) {
         String title = song['title'] ?? 'Sin título';
         String imageUrl = song['imageUrl'] ?? '';
+        String videoUrl = song['videoUrl'] ?? ''; // Recuperamos URL de video
         String presetUrl = song['presetUrl'] ?? '';
-
+        
         String ownerId = song['artistId'] ?? '';
         String artistEmail = song['artistEmail'] ?? 'Desconocido';
         String artistName = song['artistName'] ?? artistEmail.split('@')[0];
-
+        
         bool isMySong = ownerId == _uid;
 
         return Padding(
@@ -253,36 +245,13 @@ class _FeedScreenState extends State<FeedScreen> {
                   borderRadius: BorderRadius.circular(2),
                 ),
               ),
-              Container(
-                height: 250,
-                width: 250,
-                decoration: BoxDecoration(
-                  borderRadius: BorderRadius.circular(15),
-                  color: Colors.grey[900],
-                  boxShadow: [
-                    BoxShadow(
-                      color: Colors.black.withOpacity(0.5),
-                      blurRadius: 20,
-                      offset: const Offset(0, 10),
-                    ),
-                  ],
-                  image: imageUrl.isNotEmpty
-                      ? DecorationImage(
-                          image: NetworkImage(imageUrl),
-                          fit: BoxFit.cover,
-                        )
-                      : null,
-                ),
-                child: imageUrl.isEmpty
-                    ? const Icon(
-                        Icons.music_note,
-                        size: 80,
-                        color: Colors.white24,
-                      )
-                    : null,
-              ),
+              
+              // --- CARRUSEL DE MEDIOS (IMAGEN <-> VIDEO) ---
+              // Si hay videoUrl, muestra el widget deslizante. Si no, solo imagen.
+              SongMediaCarousel(imageUrl: imageUrl, videoUrl: videoUrl),
+              
               const SizedBox(height: 25),
-
+              
               Row(
                 mainAxisAlignment: MainAxisAlignment.center,
                 children: [
@@ -307,8 +276,7 @@ class _FeedScreenState extends State<FeedScreen> {
                               Navigator.push(
                                 context,
                                 MaterialPageRoute(
-                                  builder: (context) =>
-                                      ProfileScreen(userId: ownerId),
+                                  builder: (context) => ProfileScreen(userId: ownerId),
                                 ),
                               );
                             }
@@ -484,10 +452,12 @@ class _FeedScreenState extends State<FeedScreen> {
       onTap: () => _showSongDetails(_currentSongData, _currentSongId),
       child: Container(
         height: 65,
-        margin: const EdgeInsets.only(top: 1),
+        margin: const EdgeInsets.only(top: 1), 
         decoration: BoxDecoration(
-          color: const Color(0xFF282828),
-          border: Border(top: BorderSide(color: Colors.grey[900]!, width: 1)),
+          color: const Color(0xFF282828), 
+          border: Border(
+            top: BorderSide(color: Colors.grey[900]!, width: 1),
+          ),
           boxShadow: [
             BoxShadow(
               color: Colors.black.withOpacity(0.4),
@@ -515,9 +485,7 @@ class _FeedScreenState extends State<FeedScreen> {
                   return LinearProgressIndicator(
                     value: value,
                     backgroundColor: Colors.transparent,
-                    valueColor: const AlwaysStoppedAnimation<Color>(
-                      Color(0xFF1DB954),
-                    ),
+                    valueColor: const AlwaysStoppedAnimation<Color>(Color(0xFF1DB954)),
                   );
                 },
               ),
@@ -532,13 +500,10 @@ class _FeedScreenState extends State<FeedScreen> {
                       height: 63,
                       fit: BoxFit.cover,
                       errorBuilder: (c, e, s) => Container(
-                        width: 63,
-                        height: 63,
+                        width: 63, 
+                        height: 63, 
                         color: Colors.grey[800],
-                        child: const Icon(
-                          Icons.music_note,
-                          color: Colors.white24,
-                        ),
+                        child: const Icon(Icons.music_note, color: Colors.white24),
                       ),
                     )
                   else
@@ -546,12 +511,9 @@ class _FeedScreenState extends State<FeedScreen> {
                       width: 63,
                       height: 63,
                       color: Colors.grey[800],
-                      child: const Icon(
-                        Icons.music_note,
-                        color: Colors.white24,
-                      ),
+                      child: const Icon(Icons.music_note, color: Colors.white24),
                     ),
-
+                  
                   const SizedBox(width: 12),
 
                   Expanded(
@@ -594,12 +556,9 @@ class _FeedScreenState extends State<FeedScreen> {
                         return const Padding(
                           padding: EdgeInsets.all(12.0),
                           child: SizedBox(
-                            width: 24,
-                            height: 24,
-                            child: CircularProgressIndicator(
-                              strokeWidth: 2,
-                              color: Colors.white,
-                            ),
+                            width: 24, 
+                            height: 24, 
+                            child: CircularProgressIndicator(strokeWidth: 2, color: Colors.white),
                           ),
                         );
                       }
@@ -609,13 +568,13 @@ class _FeedScreenState extends State<FeedScreen> {
                           (playing == true) ? Icons.pause : Icons.play_arrow,
                           color: Colors.white,
                         ),
-                        onPressed: (playing == true)
-                            ? widget.player.pause
+                        onPressed: (playing == true) 
+                            ? widget.player.pause 
                             : widget.player.play,
                       );
                     },
                   ),
-
+                  
                   IconButton(
                     icon: const Icon(Icons.skip_next, color: Colors.white),
                     onPressed: _playNext,
@@ -640,51 +599,14 @@ class _FeedScreenState extends State<FeedScreen> {
         ),
         actions: [
           IconButton(onPressed: () {}, icon: const Icon(Icons.search)),
-
-          // --- AVATAR DEL USUARIO EN APPBAR ---
-          StreamBuilder<DocumentSnapshot>(
-            stream: FirebaseFirestore.instance
-                .collection('users')
-                .doc(_uid)
-                .snapshots(),
-            builder: (context, snapshot) {
-              ImageProvider? imageProvider;
-
-              if (snapshot.hasData && snapshot.data!.exists) {
-                var data = snapshot.data!.data() as Map<String, dynamic>;
-                if (data.containsKey('profileImageUrl') &&
-                    data['profileImageUrl'] != null &&
-                    data['profileImageUrl'].toString().isNotEmpty) {
-                  imageProvider = NetworkImage(data['profileImageUrl']);
-                }
-              }
-
-              return GestureDetector(
-                onTap: () {
-                  Navigator.push(
-                    context,
-                    MaterialPageRoute(
-                      builder: (context) => const ProfileScreen(),
-                    ),
-                  );
-                },
-                child: Padding(
-                  padding: const EdgeInsets.only(right: 16.0),
-                  child: CircleAvatar(
-                    radius: 18,
-                    backgroundColor: Colors.grey[800],
-                    backgroundImage: imageProvider,
-                    child: imageProvider == null
-                        ? const Icon(
-                            Icons.person,
-                            size: 20,
-                            color: Colors.white,
-                          )
-                        : null,
-                  ),
-                ),
+          IconButton(
+            onPressed: () {
+              Navigator.push(
+                context,
+                MaterialPageRoute(builder: (context) => const ProfileScreen()),
               );
             },
+            icon: const Icon(Icons.person),
           ),
         ],
       ),
@@ -709,7 +631,7 @@ class _FeedScreenState extends State<FeedScreen> {
                   if (!snapshot.hasData)
                     return const Center(child: CircularProgressIndicator());
                   var songs = snapshot.data!.docs;
-
+                  
                   _currentPlaylist = songs;
 
                   if (songs.isEmpty) {
@@ -730,11 +652,11 @@ class _FeedScreenState extends State<FeedScreen> {
 
                       String title = song['title'] ?? 'Sin título';
                       String artistEmail = song['artistEmail'] ?? 'Desconocido';
-                      String artistName =
-                          song['artistName'] ?? artistEmail.split('@')[0];
-
+                      String artistName = song['artistName'] ?? artistEmail.split('@')[0];
+                      
                       String audioUrl = song['audioUrl'] ?? '';
                       String imageUrl = song['imageUrl'] ?? '';
+                      String videoUrl = song['videoUrl'] ?? ''; // Obtenemos la url del video
                       List<dynamic> likedBy = song['likedBy'] ?? [];
                       bool isLiked = likedBy.contains(_uid);
                       bool isThisPlaying =
@@ -765,21 +687,21 @@ class _FeedScreenState extends State<FeedScreen> {
                                     color: Colors.white,
                                   )
                                 : (isThisPlaying
-                                      ? Container(
-                                          decoration: BoxDecoration(
-                                            color: Colors.black54,
-                                            borderRadius: BorderRadius.circular(
-                                              50,
-                                            ),
+                                    ? Container(
+                                        decoration: BoxDecoration(
+                                          color: Colors.black54,
+                                          borderRadius: BorderRadius.circular(
+                                            50,
                                           ),
-                                          child: const Center(
-                                            child: Icon(
-                                              Icons.pause,
-                                              color: Colors.white,
-                                            ),
+                                        ),
+                                        child: const Center(
+                                          child: Icon(
+                                            Icons.pause,
+                                            color: Colors.white,
                                           ),
-                                        )
-                                      : null),
+                                        ),
+                                      )
+                                    : null),
                           ),
                           title: Text(
                             title,
@@ -808,9 +730,10 @@ class _FeedScreenState extends State<FeedScreen> {
                                     _toggleLike(songDocs.id, likedBy),
                               ),
                               IconButton(
-                                icon: const Icon(
+                                icon: Icon(
                                   Icons.more_vert,
-                                  color: Colors.white70,
+                                  // Si tiene video, pintamos el icono diferente para avisar
+                                  color: videoUrl.isNotEmpty ? const Color(0xFF1DB954) : Colors.white70,
                                 ),
                                 onPressed: () =>
                                     _showSongDetails(song, songDocs.id),
@@ -832,10 +755,119 @@ class _FeedScreenState extends State<FeedScreen> {
                 },
               ),
             ),
-
+            
             _buildMiniPlayer(),
           ],
         ),
+      ),
+    );
+  }
+}
+
+// ==========================================
+// WIDGET CARRUSEL DE MEDIOS (IMAGEN + VIDEO)
+// ==========================================
+class SongMediaCarousel extends StatefulWidget {
+  final String imageUrl;
+  final String? videoUrl;
+
+  const SongMediaCarousel({
+    super.key,
+    required this.imageUrl,
+    this.videoUrl,
+  });
+
+  @override
+  State<SongMediaCarousel> createState() => _SongMediaCarouselState();
+}
+
+class _SongMediaCarouselState extends State<SongMediaCarousel> {
+  VideoPlayerController? _videoController;
+  bool _isVideoInitialized = false;
+
+  @override
+  void initState() {
+    super.initState();
+    // Preparamos el video si existe URL
+    if (widget.videoUrl != null && widget.videoUrl!.isNotEmpty) {
+      _videoController = VideoPlayerController.networkUrl(Uri.parse(widget.videoUrl!))
+        ..initialize().then((_) {
+          if (mounted) {
+            setState(() {
+              _isVideoInitialized = true;
+              _videoController!.setLooping(true); // Short en bucle
+              _videoController!.setVolume(0); // Muteado por defecto (la música es lo importante)
+              _videoController!.play(); // Autoplay visual
+            });
+          }
+        });
+    }
+  }
+
+  @override
+  void dispose() {
+    _videoController?.dispose();
+    super.dispose();
+  }
+
+  Widget _buildImage() {
+    return Container(
+      height: 250,
+      width: 250,
+      decoration: BoxDecoration(
+        borderRadius: BorderRadius.circular(15),
+        color: Colors.grey[900],
+        boxShadow: [
+          BoxShadow(
+            color: Colors.black.withOpacity(0.5),
+            blurRadius: 20,
+            offset: const Offset(0, 10),
+          ),
+        ],
+        image: widget.imageUrl.isNotEmpty
+            ? DecorationImage(
+                image: NetworkImage(widget.imageUrl),
+                fit: BoxFit.cover,
+              )
+            : null,
+      ),
+      child: widget.imageUrl.isEmpty
+          ? const Icon(Icons.music_note, size: 80, color: Colors.white24)
+          : null,
+    );
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    // Si no hay video, mostramos solo la imagen
+    if (widget.videoUrl == null || widget.videoUrl!.isEmpty) {
+      return _buildImage();
+    }
+
+    // Si hay video, mostramos el PageView deslizable
+    return SizedBox(
+      height: 250,
+      width: 250,
+      child: PageView(
+        children: [
+          // Página 1: Portada (Imagen)
+          _buildImage(),
+          
+          // Página 2: Video Short
+          Container(
+            decoration: BoxDecoration(
+              borderRadius: BorderRadius.circular(15),
+              color: Colors.black,
+            ),
+            clipBehavior: Clip.hardEdge, // Recorta el video a los bordes redondeados
+            child: _isVideoInitialized
+                ? AspectRatio(
+                    aspectRatio: _videoController!.value.aspectRatio,
+                    child: VideoPlayer(_videoController!),
+                  )
+                : const Center(child: CircularProgressIndicator(color: Color(0xFF1DB954))),
+          ),
+        ],
       ),
     );
   }

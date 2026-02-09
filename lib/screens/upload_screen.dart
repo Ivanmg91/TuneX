@@ -1,6 +1,6 @@
 import 'dart:io';
 import 'package:flutter/material.dart';
-import 'package:file_picker/file_picker.dart';
+import 'package:file_picker/file_picker.dart'; 
 import 'package:image_picker/image_picker.dart';
 import 'package:firebase_storage/firebase_storage.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
@@ -15,17 +15,19 @@ class UploadScreen extends StatefulWidget {
 
 class _UploadScreenState extends State<UploadScreen> {
   final TextEditingController _titleController = TextEditingController();
-
+  
   File? _audioFile;
   File? _imageFile;
   File? _presetFile;
-
+  File? _videoFile; // Nuevo: Archivo de video
+  
   String? _audioFileName;
   String? _presetFileName;
-
+  String? _videoFileName; // Nuevo: Nombre del video
+  
   bool _isUploading = false;
 
-  // Seleccionar Audio (.mp3, .wav, etc)
+  // Seleccionar Audio
   Future<void> _pickAudio() async {
     FilePickerResult? result = await FilePicker.platform.pickFiles(
       type: FileType.audio,
@@ -39,26 +41,18 @@ class _UploadScreenState extends State<UploadScreen> {
     }
   }
 
-  // Seleccionar Preset (CUALQUIER EXTENSIÓN, MÁX 1MB)
+  // Seleccionar Preset
   Future<void> _pickPreset() async {
     try {
-      // type: FileType.any permite cualquier extensión
-      FilePickerResult? result = await FilePicker.platform.pickFiles(
-        type: FileType.any,
-      );
+      FilePickerResult? result = await FilePicker.platform.pickFiles(type: FileType.any);
 
       if (result != null) {
         File file = File(result.files.single.path!);
-
-        // Validación de tamaño (1MB = 1024 * 1024 bytes)
         int sizeInBytes = await file.length();
         if (sizeInBytes > 1024 * 1024) {
           if (mounted) {
             ScaffoldMessenger.of(context).showSnackBar(
-              const SnackBar(
-                content: Text('El archivo supera el límite de 1MB'),
-                backgroundColor: Colors.red,
-              ),
+              const SnackBar(content: Text('El archivo supera el límite de 1MB'), backgroundColor: Colors.red),
             );
           }
           return;
@@ -70,20 +64,14 @@ class _UploadScreenState extends State<UploadScreen> {
         });
       }
     } catch (e) {
-      if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text('Error al seleccionar archivo: $e')),
-        );
-      }
+      print(e);
     }
   }
 
-  // Seleccionar Imagen (Carátula)
+  // Seleccionar Imagen
   Future<void> _pickImage() async {
     final picker = ImagePicker();
-    final XFile? pickedFile = await picker.pickImage(
-      source: ImageSource.gallery,
-    );
+    final XFile? pickedFile = await picker.pickImage(source: ImageSource.gallery);
 
     if (pickedFile != null) {
       setState(() {
@@ -92,7 +80,21 @@ class _UploadScreenState extends State<UploadScreen> {
     }
   }
 
-  // Subir Canción a Firebase
+  // Seleccionar Video Short (NUEVO)
+  Future<void> _pickVideo() async {
+    final picker = ImagePicker();
+    // pickVideo permite seleccionar videos de la galería
+    final XFile? pickedFile = await picker.pickVideo(source: ImageSource.gallery);
+
+    if (pickedFile != null) {
+      setState(() {
+        _videoFile = File(pickedFile.path);
+        _videoFileName = pickedFile.name;
+      });
+    }
+  }
+
+  // Subir Canción
   Future<void> _uploadSong() async {
     if (_audioFile == null || _titleController.text.trim().isEmpty) {
       ScaffoldMessenger.of(context).showSnackBar(
@@ -107,49 +109,48 @@ class _UploadScreenState extends State<UploadScreen> {
       final user = FirebaseAuth.instance.currentUser;
       if (user == null) return;
 
-      // 1. Obtener datos actualizados del artista
       DocumentSnapshot userDoc = await FirebaseFirestore.instance
           .collection('users')
           .doc(user.uid)
           .get();
-
+      
       String artistName = user.email!.split('@')[0];
       if (userDoc.exists) {
         var data = userDoc.data() as Map<String, dynamic>;
-        if (data.containsKey('username') &&
-            data['username'].toString().isNotEmpty) {
+        if (data.containsKey('username') && data['username'].toString().isNotEmpty) {
           artistName = data['username'];
         }
       }
 
       String songId = DateTime.now().millisecondsSinceEpoch.toString();
-
-      // 2. Subir Audio
+      
+      // 1. Audio
       String audioPath = 'songs/$songId.mp3';
-      TaskSnapshot audioSnap = await FirebaseStorage.instance
-          .ref(audioPath)
-          .putFile(_audioFile!);
+      TaskSnapshot audioSnap = await FirebaseStorage.instance.ref(audioPath).putFile(_audioFile!);
       String audioUrl = await audioSnap.ref.getDownloadURL();
 
-      // 3. Subir Imagen (si existe)
+      // 2. Imagen
       String imageUrl = '';
       if (_imageFile != null) {
         String imagePath = 'covers/$songId.jpg';
-        TaskSnapshot imageSnap = await FirebaseStorage.instance
-            .ref(imagePath)
-            .putFile(_imageFile!);
+        TaskSnapshot imageSnap = await FirebaseStorage.instance.ref(imagePath).putFile(_imageFile!);
         imageUrl = await imageSnap.ref.getDownloadURL();
       }
 
-      // 4. Subir Preset (si existe)
+      // 3. Preset
       String presetUrl = '';
       if (_presetFile != null) {
-        // Usamos el nombre original para mantener la extensión
         String presetPath = 'presets/$songId/$_presetFileName';
-        TaskSnapshot presetSnap = await FirebaseStorage.instance
-            .ref(presetPath)
-            .putFile(_presetFile!);
+        TaskSnapshot presetSnap = await FirebaseStorage.instance.ref(presetPath).putFile(_presetFile!);
         presetUrl = await presetSnap.ref.getDownloadURL();
+      }
+
+      // 4. Video Short (NUEVO)
+      String videoUrl = '';
+      if (_videoFile != null) {
+        String videoPath = 'videos/$songId.mp4';
+        TaskSnapshot videoSnap = await FirebaseStorage.instance.ref(videoPath).putFile(_videoFile!);
+        videoUrl = await videoSnap.ref.getDownloadURL();
       }
 
       // 5. Guardar en Firestore
@@ -162,6 +163,7 @@ class _UploadScreenState extends State<UploadScreen> {
         'audioUrl': audioUrl,
         'imageUrl': imageUrl,
         'presetUrl': presetUrl,
+        'videoUrl': videoUrl, // Guardamos la URL del video
         'uploadedAt': FieldValue.serverTimestamp(),
         'likes': 0,
         'likedBy': [],
@@ -170,14 +172,14 @@ class _UploadScreenState extends State<UploadScreen> {
       if (mounted) {
         Navigator.pop(context);
         ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(content: Text('Canción y preset subidos con éxito!')),
+          const SnackBar(content: Text('Canción subida con éxito!')),
         );
       }
     } catch (e) {
       if (mounted) {
-        ScaffoldMessenger.of(
-          context,
-        ).showSnackBar(SnackBar(content: Text('Error al subir: $e')));
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text('Error al subir: $e')),
+        );
       }
     } finally {
       if (mounted) setState(() => _isUploading = false);
@@ -192,37 +194,68 @@ class _UploadScreenState extends State<UploadScreen> {
         padding: const EdgeInsets.all(20),
         child: Column(
           children: [
-            // Selección de Imagen (Carátula)
-            GestureDetector(
-              onTap: _pickImage,
-              child: Container(
-                height: 200,
-                width: 200,
-                decoration: BoxDecoration(
-                  color: Colors.grey[900],
-                  borderRadius: BorderRadius.circular(15),
-                  image: _imageFile != null
-                      ? DecorationImage(
-                          image: FileImage(_imageFile!),
-                          fit: BoxFit.cover,
-                        )
-                      : null,
-                  border: Border.all(color: Colors.grey[800]!),
+            // Fila: Imagen y Video
+            Row(
+              mainAxisAlignment: MainAxisAlignment.spaceEvenly,
+              children: [
+                // Imagen
+                GestureDetector(
+                  onTap: _pickImage,
+                  child: Container(
+                    height: 150,
+                    width: 150,
+                    decoration: BoxDecoration(
+                      color: Colors.grey[900],
+                      borderRadius: BorderRadius.circular(15),
+                      image: _imageFile != null
+                          ? DecorationImage(image: FileImage(_imageFile!), fit: BoxFit.cover)
+                          : null,
+                      border: Border.all(color: Colors.grey[800]!),
+                    ),
+                    child: _imageFile == null
+                        ? const Column(
+                            mainAxisAlignment: MainAxisAlignment.center,
+                            children: [
+                              Icon(Icons.image, size: 40, color: Colors.white54),
+                              SizedBox(height: 5),
+                              Text("Portada", style: TextStyle(color: Colors.grey, fontSize: 12)),
+                            ],
+                          )
+                        : null,
+                  ),
                 ),
-                child: _imageFile == null
-                    ? const Column(
-                        mainAxisAlignment: MainAxisAlignment.center,
-                        children: [
-                          Icon(Icons.image, size: 50, color: Colors.white54),
-                          SizedBox(height: 10),
-                          Text(
-                            "Toca para añadir carátula",
-                            style: TextStyle(color: Colors.grey),
-                          ),
-                        ],
-                      )
-                    : null,
-              ),
+                // Video Short (NUEVO UI)
+                GestureDetector(
+                  onTap: _pickVideo,
+                  child: Container(
+                    height: 150,
+                    width: 150,
+                    decoration: BoxDecoration(
+                      color: Colors.grey[900],
+                      borderRadius: BorderRadius.circular(15),
+                      border: Border.all(color: _videoFile != null ? const Color(0xFF1DB954) : Colors.grey[800]!),
+                    ),
+                    child: Column(
+                      mainAxisAlignment: MainAxisAlignment.center,
+                      children: [
+                        Icon(
+                          _videoFile != null ? Icons.videocam : Icons.videocam_outlined, 
+                          size: 40, 
+                          color: _videoFile != null ? const Color(0xFF1DB954) : Colors.white54
+                        ),
+                        const SizedBox(height: 5),
+                        Text(
+                          _videoFile != null ? "Video Listo" : "Añadir Short", 
+                          style: TextStyle(
+                            color: _videoFile != null ? const Color(0xFF1DB954) : Colors.grey, 
+                            fontSize: 12
+                          )
+                        ),
+                      ],
+                    ),
+                  ),
+                ),
+              ],
             ),
             const SizedBox(height: 30),
 
@@ -254,19 +287,14 @@ class _UploadScreenState extends State<UploadScreen> {
               child: Row(
                 children: [
                   IconButton(
-                    icon: const Icon(
-                      Icons.audio_file,
-                      color: Color(0xFF1DB954),
-                    ),
+                    icon: const Icon(Icons.audio_file, color: Color(0xFF1DB954)),
                     onPressed: _pickAudio,
                   ),
                   Expanded(
                     child: Text(
                       _audioFileName ?? "Seleccionar archivo de audio (.mp3)",
                       style: TextStyle(
-                        color: _audioFileName != null
-                            ? Colors.white
-                            : Colors.grey,
+                        color: _audioFileName != null ? Colors.white : Colors.grey,
                       ),
                       overflow: TextOverflow.ellipsis,
                     ),
@@ -276,7 +304,7 @@ class _UploadScreenState extends State<UploadScreen> {
             ),
             const SizedBox(height: 20),
 
-            // Selección de Preset (Cualquier Archivo)
+            // Selección de Preset
             Container(
               padding: const EdgeInsets.symmetric(horizontal: 15, vertical: 5),
               decoration: BoxDecoration(
@@ -286,31 +314,21 @@ class _UploadScreenState extends State<UploadScreen> {
               child: Row(
                 children: [
                   IconButton(
-                    icon: const Icon(
-                      Icons.file_present,
-                      color: Colors.blueAccent,
-                    ),
+                    icon: const Icon(Icons.file_present, color: Colors.blueAccent),
                     onPressed: _pickPreset,
                   ),
                   Expanded(
                     child: Text(
-                      _presetFileName ??
-                          "Seleccionar archivo Preset (Opcional)",
+                      _presetFileName ?? "Seleccionar archivo Preset (Opcional)",
                       style: TextStyle(
-                        color: _presetFileName != null
-                            ? Colors.white
-                            : Colors.grey,
+                        color: _presetFileName != null ? Colors.white : Colors.grey,
                       ),
                       overflow: TextOverflow.ellipsis,
                     ),
                   ),
                   if (_presetFile != null)
                     IconButton(
-                      icon: const Icon(
-                        Icons.close,
-                        color: Colors.red,
-                        size: 20,
-                      ),
+                      icon: const Icon(Icons.close, color: Colors.red, size: 20),
                       onPressed: () {
                         setState(() {
                           _presetFile = null;
@@ -325,14 +343,14 @@ class _UploadScreenState extends State<UploadScreen> {
             const Align(
               alignment: Alignment.centerLeft,
               child: Text(
-                " Máx. 1MB. Sube tu archivo preset (cualquier formato aceptado)",
+                " Máx. 1MB. Sube tu archivo preset.",
                 style: TextStyle(color: Colors.grey, fontSize: 12),
               ),
             ),
 
             const SizedBox(height: 40),
 
-            // Botón de Subida
+            // Botón
             SizedBox(
               width: double.infinity,
               height: 50,
@@ -347,10 +365,7 @@ class _UploadScreenState extends State<UploadScreen> {
                 ),
                 child: _isUploading
                     ? const CircularProgressIndicator(color: Colors.white)
-                    : const Text(
-                        "PUBLICAR CANCIÓN",
-                        style: TextStyle(fontWeight: FontWeight.bold),
-                      ),
+                    : const Text("PUBLICAR CANCIÓN", style: TextStyle(fontWeight: FontWeight.bold)),
               ),
             ),
           ],
