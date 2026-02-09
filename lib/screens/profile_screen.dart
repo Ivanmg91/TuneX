@@ -4,7 +4,7 @@ import 'package:firebase_auth/firebase_auth.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_storage/firebase_storage.dart';
 import 'package:image_picker/image_picker.dart';
-import 'package:file_picker/file_picker.dart'; // NECESARIO AHORA AQUÍ TAMBIÉN
+import 'package:file_picker/file_picker.dart'; 
 import 'upload_screen.dart';
 import 'login_screen.dart';
 
@@ -178,7 +178,6 @@ class _ProfileScreenState extends State<ProfileScreen> {
     }
   }
 
-  // --- FUNCIÓN PARA ABRIR EL EDITOR AVANZADO ---
   void _openEditSongDialog(Map<String, dynamic> songData, String songId) {
     showDialog(
       context: context,
@@ -188,6 +187,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
         currentImageUrl: songData['imageUrl'] ?? '',
         currentAudioUrl: songData['audioUrl'] ?? '',
         currentPresetUrl: songData['presetUrl'] ?? '',
+        currentVideoUrl: songData['videoUrl'] ?? '', 
       ),
     );
   }
@@ -390,7 +390,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
                                   : null,
                             ),
                             title: Text(song['title'] ?? 'Sin título', style: const TextStyle(color: Colors.white, fontWeight: FontWeight.w500)),
-                            subtitle: Text("${song['likes'] ?? 0} Likes", style: TextStyle(color: Colors.grey[500], fontSize: 12)),
+                            subtitle: Text(song['artistName'] ?? "Desconocido", style: TextStyle(color: Colors.grey[500], fontSize: 12)),
                             trailing: isMyProfile 
                               ? IconButton(
                                   icon: const Icon(Icons.edit, color: Colors.white70),
@@ -416,7 +416,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
 }
 
 // =======================================================
-// WIDGET DE EDICIÓN AVANZADA (Título, Imagen, Audio, Preset)
+// WIDGET DE EDICIÓN AVANZADA (Con Opción de Borrar)
 // =======================================================
 class EditSongDialog extends StatefulWidget {
   final String songId;
@@ -424,6 +424,7 @@ class EditSongDialog extends StatefulWidget {
   final String currentImageUrl;
   final String currentAudioUrl;
   final String currentPresetUrl;
+  final String currentVideoUrl;
 
   const EditSongDialog({
     super.key,
@@ -432,6 +433,7 @@ class EditSongDialog extends StatefulWidget {
     required this.currentImageUrl,
     required this.currentAudioUrl,
     required this.currentPresetUrl,
+    required this.currentVideoUrl,
   });
 
   @override
@@ -441,11 +443,18 @@ class EditSongDialog extends StatefulWidget {
 class _EditSongDialogState extends State<EditSongDialog> {
   final TextEditingController _titleController = TextEditingController();
   
-  // Archivos nuevos (si se seleccionan)
+  // Archivos nuevos
   File? _newImageFile;
   File? _newAudioFile;
   File? _newPresetFile;
-  String? _newPresetName; // Para mostrar el nombre del archivo seleccionado
+  File? _newVideoFile;
+  
+  String? _newPresetName;
+
+  // Flags para borrado
+  bool _deleteImage = false;
+  bool _deletePreset = false;
+  bool _deleteVideo = false;
 
   bool _isSaving = false;
 
@@ -455,20 +464,21 @@ class _EditSongDialogState extends State<EditSongDialog> {
     _titleController.text = widget.currentTitle;
   }
 
-  // Pickers
+  // --- Pickers ---
   Future<void> _pickImage() async {
     final picker = ImagePicker();
     final XFile? picked = await picker.pickImage(source: ImageSource.gallery);
     if (picked != null) {
-      setState(() => _newImageFile = File(picked.path));
+      setState(() {
+        _newImageFile = File(picked.path);
+        _deleteImage = false; // Si selecciono nuevo, no borro
+      });
     }
   }
 
   Future<void> _pickAudio() async {
     FilePickerResult? result = await FilePicker.platform.pickFiles(type: FileType.audio);
-    if (result != null) {
-      setState(() => _newAudioFile = File(result.files.single.path!));
-    }
+    if (result != null) setState(() => _newAudioFile = File(result.files.single.path!));
   }
 
   Future<void> _pickPreset() async {
@@ -477,9 +487,27 @@ class _EditSongDialogState extends State<EditSongDialog> {
       setState(() {
         _newPresetFile = File(result.files.single.path!);
         _newPresetName = result.files.single.name;
+        _deletePreset = false;
       });
     }
   }
+
+  Future<void> _pickVideo() async {
+    final picker = ImagePicker();
+    final XFile? picked = await picker.pickVideo(source: ImageSource.gallery);
+    if (picked != null) {
+      setState(() {
+        _newVideoFile = File(picked.path);
+        _deleteVideo = false;
+      });
+    }
+  }
+
+  // --- Helpers para UI ---
+  // Nos dice si hay algo que mostrar (ya sea viejo o nuevo)
+  bool get _hasImage => (_newImageFile != null) || (widget.currentImageUrl.isNotEmpty && !_deleteImage);
+  bool get _hasPreset => (_newPresetFile != null) || (widget.currentPresetUrl.isNotEmpty && !_deletePreset);
+  bool get _hasVideo => (_newVideoFile != null) || (widget.currentVideoUrl.isNotEmpty && !_deleteVideo);
 
   Future<void> _saveChanges() async {
     setState(() => _isSaving = true);
@@ -488,34 +516,45 @@ class _EditSongDialogState extends State<EditSongDialog> {
       String timestamp = DateTime.now().millisecondsSinceEpoch.toString();
       Map<String, dynamic> updates = {};
 
-      // 1. Título
       if (_titleController.text.trim() != widget.currentTitle) {
         updates['title'] = _titleController.text.trim();
       }
 
-      // 2. Imagen
+      // --- IMAGEN ---
       if (_newImageFile != null) {
-        // Usamos timestamp para evitar caché
         String path = 'covers/${widget.songId}_$timestamp.jpg';
         TaskSnapshot snap = await FirebaseStorage.instance.ref(path).putFile(_newImageFile!);
         updates['imageUrl'] = await snap.ref.getDownloadURL();
+      } else if (_deleteImage) {
+        updates['imageUrl'] = ''; // Borrado lógico
       }
 
-      // 3. Audio
+      // --- AUDIO ---
       if (_newAudioFile != null) {
         String path = 'songs/${widget.songId}_$timestamp.mp3';
         TaskSnapshot snap = await FirebaseStorage.instance.ref(path).putFile(_newAudioFile!);
         updates['audioUrl'] = await snap.ref.getDownloadURL();
       }
 
-      // 4. Preset
+      // --- PRESET ---
       if (_newPresetFile != null) {
         String path = 'presets/${widget.songId}/$_newPresetName';
         TaskSnapshot snap = await FirebaseStorage.instance.ref(path).putFile(_newPresetFile!);
         updates['presetUrl'] = await snap.ref.getDownloadURL();
+      } else if (_deletePreset) {
+        updates['presetUrl'] = ''; // Borrado lógico
       }
 
-      // 5. Aplicar cambios en Firestore
+      // --- VIDEO ---
+      if (_newVideoFile != null) {
+        String path = 'videos/${widget.songId}_$timestamp.mp4';
+        TaskSnapshot snap = await FirebaseStorage.instance.ref(path).putFile(_newVideoFile!);
+        updates['videoUrl'] = await snap.ref.getDownloadURL();
+      } else if (_deleteVideo) {
+        updates['videoUrl'] = ''; // Borrado lógico
+      }
+
+      // Aplicar cambios
       if (updates.isNotEmpty) {
         await FirebaseFirestore.instance
             .collection('songs')
@@ -565,7 +604,7 @@ class _EditSongDialogState extends State<EditSongDialog> {
             ),
             const SizedBox(height: 20),
 
-            // IMAGEN
+            // --- IMAGEN ---
             Row(
               children: [
                 Container(
@@ -573,27 +612,41 @@ class _EditSongDialogState extends State<EditSongDialog> {
                   decoration: BoxDecoration(
                     color: Colors.grey[800],
                     borderRadius: BorderRadius.circular(5),
-                    image: _newImageFile != null
-                        ? DecorationImage(image: FileImage(_newImageFile!), fit: BoxFit.cover)
-                        : (widget.currentImageUrl.isNotEmpty 
-                            ? DecorationImage(image: NetworkImage(widget.currentImageUrl), fit: BoxFit.cover)
-                            : null),
+                    image: _hasImage
+                        ? DecorationImage(
+                            image: _newImageFile != null 
+                                ? FileImage(_newImageFile!) as ImageProvider
+                                : NetworkImage(widget.currentImageUrl), 
+                            fit: BoxFit.cover
+                          )
+                        : null,
                   ),
-                  child: (_newImageFile == null && widget.currentImageUrl.isEmpty) 
-                      ? const Icon(Icons.music_note, color: Colors.white24) : null,
+                  child: !_hasImage ? const Icon(Icons.image_not_supported, color: Colors.white24) : null,
                 ),
                 const SizedBox(width: 15),
-                TextButton.icon(
-                  onPressed: _pickImage,
-                  icon: const Icon(Icons.image, color: Color(0xFF1DB954)),
-                  label: Text(_newImageFile == null ? "Cambiar Portada" : "Imagen Seleccionada", 
-                      style: const TextStyle(color: Colors.white70)),
-                )
+                Expanded(
+                  child: TextButton(
+                    onPressed: _pickImage,
+                    style: TextButton.styleFrom(alignment: Alignment.centerLeft),
+                    child: Text(_hasImage ? "Cambiar Portada" : "Añadir Portada", 
+                        style: const TextStyle(color: Color(0xFF1DB954))),
+                  ),
+                ),
+                if (_hasImage)
+                  IconButton(
+                    icon: const Icon(Icons.delete, color: Colors.redAccent),
+                    onPressed: () {
+                      setState(() {
+                        _newImageFile = null;
+                        _deleteImage = true;
+                      });
+                    },
+                  ),
               ],
             ),
             const SizedBox(height: 15),
 
-            // AUDIO
+            // --- AUDIO (No se puede borrar, solo reemplazar) ---
             Row(
               children: [
                 const Icon(Icons.audio_file, color: Colors.white54),
@@ -611,7 +664,7 @@ class _EditSongDialogState extends State<EditSongDialog> {
               ],
             ),
 
-            // PRESET
+            // --- PRESET ---
             Row(
               children: [
                 const Icon(Icons.settings_suggest, color: Colors.white54),
@@ -621,11 +674,53 @@ class _EditSongDialogState extends State<EditSongDialog> {
                     onPressed: _pickPreset,
                     style: TextButton.styleFrom(alignment: Alignment.centerLeft),
                     child: Text(
-                      _newPresetFile == null ? "Cambiar Preset" : "Preset: $_newPresetName",
-                      style: TextStyle(color: _newPresetFile == null ? const Color(0xFF1DB954) : Colors.greenAccent),
+                      _hasPreset 
+                          ? (_newPresetName != null ? "Preset: $_newPresetName" : "Preset Actual")
+                          : "Añadir Preset",
+                      style: TextStyle(color: _hasPreset ? Colors.greenAccent : const Color(0xFF1DB954)),
                     ),
                   ),
                 ),
+                if (_hasPreset)
+                  IconButton(
+                    icon: const Icon(Icons.delete, color: Colors.redAccent),
+                    onPressed: () {
+                      setState(() {
+                        _newPresetFile = null;
+                        _deletePreset = true;
+                      });
+                    },
+                  ),
+              ],
+            ),
+
+            // --- VIDEO ---
+            Row(
+              children: [
+                const Icon(Icons.videocam, color: Colors.white54),
+                const SizedBox(width: 15),
+                Expanded(
+                  child: TextButton(
+                    onPressed: _pickVideo,
+                    style: TextButton.styleFrom(alignment: Alignment.centerLeft),
+                    child: Text(
+                      _hasVideo
+                          ? (_newVideoFile != null ? "Nuevo Video Seleccionado" : "Video Short Actual")
+                          : "Añadir Video Short",
+                      style: TextStyle(color: _hasVideo ? Colors.greenAccent : const Color(0xFF1DB954)),
+                    ),
+                  ),
+                ),
+                if (_hasVideo)
+                  IconButton(
+                    icon: const Icon(Icons.delete, color: Colors.redAccent),
+                    onPressed: () {
+                      setState(() {
+                        _newVideoFile = null;
+                        _deleteVideo = true;
+                      });
+                    },
+                  ),
               ],
             ),
           ],

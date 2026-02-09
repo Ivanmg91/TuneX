@@ -3,7 +3,7 @@ import 'package:just_audio/just_audio.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:url_launcher/url_launcher.dart';
-import 'package:video_player/video_player.dart'; // IMPORTANTE
+import 'package:video_player/video_player.dart';
 import 'profile_screen.dart';
 
 class FeedScreen extends StatefulWidget {
@@ -167,40 +167,6 @@ class _FeedScreenState extends State<FeedScreen> {
     }
   }
 
-  Future<void> _editSongTitle(String songId, String currentTitle) async {
-    TextEditingController editController = TextEditingController(
-      text: currentTitle,
-    );
-    await showDialog(
-      context: context,
-      builder: (context) => AlertDialog(
-        title: const Text("Editar Título"),
-        content: TextField(
-          controller: editController,
-          decoration: const InputDecoration(labelText: "Nuevo título"),
-        ),
-        actions: [
-          TextButton(
-            onPressed: () => Navigator.pop(context),
-            child: const Text("Cancelar"),
-          ),
-          ElevatedButton(
-            onPressed: () async {
-              if (editController.text.trim().isNotEmpty) {
-                await FirebaseFirestore.instance
-                    .collection('songs')
-                    .doc(songId)
-                    .update({'title': editController.text.trim()});
-                if (mounted) Navigator.pop(context);
-              }
-            },
-            child: const Text("Guardar"),
-          ),
-        ],
-      ),
-    );
-  }
-
   String _formatDuration(Duration? duration) {
     if (duration == null) return "--:--";
     String twoDigits(int n) => n.toString().padLeft(2, '0');
@@ -222,7 +188,7 @@ class _FeedScreenState extends State<FeedScreen> {
       builder: (context) {
         String title = song['title'] ?? 'Sin título';
         String imageUrl = song['imageUrl'] ?? '';
-        String videoUrl = song['videoUrl'] ?? ''; // Recuperamos URL de video
+        String videoUrl = song['videoUrl'] ?? ''; 
         String presetUrl = song['presetUrl'] ?? '';
         
         String ownerId = song['artistId'] ?? '';
@@ -246,8 +212,6 @@ class _FeedScreenState extends State<FeedScreen> {
                 ),
               ),
               
-              // --- CARRUSEL DE MEDIOS (IMAGEN <-> VIDEO) ---
-              // Si hay videoUrl, muestra el widget deslizante. Si no, solo imagen.
               SongMediaCarousel(imageUrl: imageUrl, videoUrl: videoUrl),
               
               const SizedBox(height: 25),
@@ -258,15 +222,17 @@ class _FeedScreenState extends State<FeedScreen> {
                   Flexible(
                     child: Column(
                       children: [
-                        Text(
-                          title,
-                          style: const TextStyle(
-                            color: Colors.white,
-                            fontSize: 24,
-                            fontWeight: FontWeight.bold,
+                        // TITULO CON DESPLAZAMIENTO (SCROLL)
+                        SizedBox(
+                          height: 30,
+                          child: ScrollingText(
+                            text: title,
+                            style: const TextStyle(
+                              color: Colors.white,
+                              fontSize: 24,
+                              fontWeight: FontWeight.bold,
+                            ),
                           ),
-                          textAlign: TextAlign.center,
-                          overflow: TextOverflow.ellipsis,
                         ),
                         const SizedBox(height: 4),
                         InkWell(
@@ -300,11 +266,7 @@ class _FeedScreenState extends State<FeedScreen> {
                       ],
                     ),
                   ),
-                  if (isMySong)
-                    IconButton(
-                      icon: const Icon(Icons.edit, color: Colors.blueGrey),
-                      onPressed: () => _editSongTitle(songId, title),
-                    ),
+                  // CAMBIO: Eliminado el botón de editar título de aquí (Request 3)
                 ],
               ),
 
@@ -656,7 +618,7 @@ class _FeedScreenState extends State<FeedScreen> {
                       
                       String audioUrl = song['audioUrl'] ?? '';
                       String imageUrl = song['imageUrl'] ?? '';
-                      String videoUrl = song['videoUrl'] ?? ''; // Obtenemos la url del video
+                      String videoUrl = song['videoUrl'] ?? ''; 
                       List<dynamic> likedBy = song['likedBy'] ?? [];
                       bool isLiked = likedBy.contains(_uid);
                       bool isThisPlaying =
@@ -703,11 +665,15 @@ class _FeedScreenState extends State<FeedScreen> {
                                       )
                                     : null),
                           ),
-                          title: Text(
-                            title,
-                            style: const TextStyle(
-                              fontWeight: FontWeight.bold,
-                              color: Colors.white,
+                          // TITULO: Usamos el Widget de desplazamiento también aquí
+                          title: SizedBox(
+                            height: 20,
+                            child: ScrollingText(
+                              text: title,
+                              style: const TextStyle(
+                                fontWeight: FontWeight.bold,
+                                color: Colors.white,
+                              ),
                             ),
                           ),
                           subtitle: Text(
@@ -730,10 +696,9 @@ class _FeedScreenState extends State<FeedScreen> {
                                     _toggleLike(songDocs.id, likedBy),
                               ),
                               IconButton(
-                                icon: Icon(
+                                icon: const Icon(
                                   Icons.more_vert,
-                                  // Si tiene video, pintamos el icono diferente para avisar
-                                  color: videoUrl.isNotEmpty ? const Color(0xFF1DB954) : Colors.white70,
+                                  color: Colors.white70, // CAMBIO: Color siempre blanco/gris (Request 4)
                                 ),
                                 onPressed: () =>
                                     _showSongDetails(song, songDocs.id),
@@ -788,16 +753,15 @@ class _SongMediaCarouselState extends State<SongMediaCarousel> {
   @override
   void initState() {
     super.initState();
-    // Preparamos el video si existe URL
     if (widget.videoUrl != null && widget.videoUrl!.isNotEmpty) {
       _videoController = VideoPlayerController.networkUrl(Uri.parse(widget.videoUrl!))
         ..initialize().then((_) {
           if (mounted) {
             setState(() {
               _isVideoInitialized = true;
-              _videoController!.setLooping(true); // Short en bucle
-              _videoController!.setVolume(0); // Muteado por defecto (la música es lo importante)
-              _videoController!.play(); // Autoplay visual
+              _videoController!.setLooping(true); 
+              _videoController!.setVolume(0); 
+              _videoController!.play(); 
             });
           }
         });
@@ -839,27 +803,22 @@ class _SongMediaCarouselState extends State<SongMediaCarousel> {
 
   @override
   Widget build(BuildContext context) {
-    // Si no hay video, mostramos solo la imagen
     if (widget.videoUrl == null || widget.videoUrl!.isEmpty) {
       return _buildImage();
     }
 
-    // Si hay video, mostramos el PageView deslizable
     return SizedBox(
       height: 250,
       width: 250,
       child: PageView(
         children: [
-          // Página 1: Portada (Imagen)
           _buildImage(),
-          
-          // Página 2: Video Short
           Container(
             decoration: BoxDecoration(
               borderRadius: BorderRadius.circular(15),
               color: Colors.black,
             ),
-            clipBehavior: Clip.hardEdge, // Recorta el video a los bordes redondeados
+            clipBehavior: Clip.hardEdge, 
             child: _isVideoInitialized
                 ? AspectRatio(
                     aspectRatio: _videoController!.value.aspectRatio,
@@ -869,6 +828,69 @@ class _SongMediaCarouselState extends State<SongMediaCarousel> {
           ),
         ],
       ),
+    );
+  }
+}
+
+// ==========================================
+// WIDGET TEXTO DESPLAZABLE (MARQUEE) (Request 1)
+// ==========================================
+class ScrollingText extends StatefulWidget {
+  final String text;
+  final TextStyle style;
+
+  const ScrollingText({
+    super.key,
+    required this.text,
+    required this.style,
+  });
+
+  @override
+  State<ScrollingText> createState() => _ScrollingTextState();
+}
+
+class _ScrollingTextState extends State<ScrollingText> {
+  final ScrollController _scrollController = ScrollController();
+
+  @override
+  void initState() {
+    super.initState();
+    // Iniciamos el scroll automático después de un pequeño delay
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      _startScrolling();
+    });
+  }
+
+  void _startScrolling() async {
+    while (_scrollController.hasClients) {
+      await Future.delayed(const Duration(seconds: 2));
+      if (_scrollController.hasClients && 
+          _scrollController.position.maxScrollExtent > 0) {
+        await _scrollController.animateTo(
+          _scrollController.position.maxScrollExtent,
+          duration: Duration(seconds: (widget.text.length * 0.2).toInt().clamp(2, 10)),
+          curve: Curves.linear,
+        );
+        await Future.delayed(const Duration(seconds: 1));
+        if (_scrollController.hasClients) {
+          _scrollController.jumpTo(0);
+        }
+      }
+    }
+  }
+
+  @override
+  void dispose() {
+    _scrollController.dispose();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return SingleChildScrollView(
+      scrollDirection: Axis.horizontal,
+      controller: _scrollController,
+      child: Text(widget.text, style: widget.style),
     );
   }
 }
