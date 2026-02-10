@@ -222,7 +222,6 @@ class _FeedScreenState extends State<FeedScreen> {
                   Flexible(
                     child: Column(
                       children: [
-                        // TITULO CON DESPLAZAMIENTO (SCROLL)
                         SizedBox(
                           height: 30,
                           child: ScrollingText(
@@ -266,7 +265,6 @@ class _FeedScreenState extends State<FeedScreen> {
                       ],
                     ),
                   ),
-                  // CAMBIO: Eliminado el botón de editar título de aquí (Request 3)
                 ],
               ),
 
@@ -665,7 +663,6 @@ class _FeedScreenState extends State<FeedScreen> {
                                       )
                                     : null),
                           ),
-                          // TITULO: Usamos el Widget de desplazamiento también aquí
                           title: SizedBox(
                             height: 20,
                             child: ScrollingText(
@@ -698,7 +695,7 @@ class _FeedScreenState extends State<FeedScreen> {
                               IconButton(
                                 icon: const Icon(
                                   Icons.more_vert,
-                                  color: Colors.white70, // CAMBIO: Color siempre blanco/gris (Request 4)
+                                  color: Colors.white70,
                                 ),
                                 onPressed: () =>
                                     _showSongDetails(song, songDocs.id),
@@ -754,13 +751,16 @@ class _SongMediaCarouselState extends State<SongMediaCarousel> {
   void initState() {
     super.initState();
     if (widget.videoUrl != null && widget.videoUrl!.isNotEmpty) {
-      _videoController = VideoPlayerController.networkUrl(Uri.parse(widget.videoUrl!))
-        ..initialize().then((_) {
+      _videoController = VideoPlayerController.networkUrl(
+        Uri.parse(widget.videoUrl!),
+        // CLAVE: Esto asegura que el video NO pause la música
+        videoPlayerOptions: VideoPlayerOptions(mixWithOthers: true),
+      )..initialize().then((_) {
           if (mounted) {
             setState(() {
               _isVideoInitialized = true;
               _videoController!.setLooping(true); 
-              _videoController!.setVolume(0); 
+              _videoController!.setVolume(0); // Silencio total
               _videoController!.play(); 
             });
           }
@@ -833,7 +833,7 @@ class _SongMediaCarouselState extends State<SongMediaCarousel> {
 }
 
 // ==========================================
-// WIDGET TEXTO DESPLAZABLE (MARQUEE) (Request 1)
+// WIDGET TEXTO DESPLAZABLE (MARQUEE)
 // ==========================================
 class ScrollingText extends StatefulWidget {
   final String text;
@@ -855,7 +855,6 @@ class _ScrollingTextState extends State<ScrollingText> {
   @override
   void initState() {
     super.initState();
-    // Iniciamos el scroll automático después de un pequeño delay
     WidgetsBinding.instance.addPostFrameCallback((_) {
       _startScrolling();
     });
